@@ -1,0 +1,35 @@
+{
+  "fields": [
+    {
+      "metadata": {},
+      "name": "TestRunId",
+      "nullable": true,
+      "type": "integer"
+    },
+    {
+      "metadata": {},
+      "name": "TestTimestamp",
+      "nullable": true,
+      "type": "timestamp"
+    },
+    {
+      "metadata": {},
+      "name": "TestId",
+      "nullable": true,
+      "type": "integer"
+    },
+    {
+      "metadata": {},
+      "name": "TestResult",
+      "nullable": true,
+      "type": "string"
+    },
+    {
+      "metadata": {},
+      "name": "IsCritical",
+      "nullable": true,
+      "type": "boolean"
+    }
+  ],
+  "type": "struct"
+}

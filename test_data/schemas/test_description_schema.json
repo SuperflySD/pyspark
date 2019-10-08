@@ -1,0 +1,29 @@
+{
+  "fields": [
+    {
+      "metadata": {},
+      "name": "Author",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "metadata": {},
+      "name": "TestDescription",
+      "nullable": false,
+      "type": "string"
+    },
+    {
+      "metadata": {},
+      "name": "TestId",
+      "nullable": false,
+      "type": "long"
+    },
+    {
+      "metadata": {},
+      "name": "TestName",
+      "nullable": false,
+      "type": "string"
+    }
+  ],
+  "type": "struct"
+}
