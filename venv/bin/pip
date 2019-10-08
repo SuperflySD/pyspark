@@ -1,4 +1,4 @@
-#!/home/sergey/PycharmProjects/untitled/venv/bin/python
+#!/home/sergey/IdeaProjects/pyspark/venv/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys

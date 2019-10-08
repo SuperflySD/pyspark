@@ -18,7 +18,7 @@ with open('../test_data/schemas/test_runs_schema.json') as data_file:
     schema = StructType.fromJson(json.load(data_file))
 runsDF = sqlContext.read.format('csv') \
     .schema(schema).options(header='true') \
-    .load('/home/sergey/PycharmProjects/untitled/test_data/test_runs.csv').cache()
+    .load('../test_data/test_runs.csv').cache()
 
 with open('../test_data/schemas/test_description_schema.json') as data_file:
     new_schema = StructType.fromJson(json.load(data_file))
@@ -76,7 +76,7 @@ class TestSpark:
                           mergeValue=lambda c, val: c + [val],
                           mergeCombiners=lambda u, u1: u + u1) \
             .mapValues(lambda val: {
-            'TestRunDuration': min(val, key=lambda val: val[1])[1].__str__() + "---" + max(val, key=lambda val: val[1])[
+            'TestRunDuration': str(min(val, key=lambda val: val[1])[1]) + "---" + max(val, key=lambda val: val[1])[
                 1].__str__(),
             'TotalNumberOfTests': len(val),
             'NumberOfFailures': len([item for item in val if item[3] == 'FAILURE']),
