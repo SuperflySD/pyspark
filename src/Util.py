@@ -59,7 +59,7 @@ class TestSpark:
                           mergeValue=lambda c, val: c + [val],
                           mergeCombiners=lambda u, u1: u + u1) \
             .mapValues(lambda val: {
-            'TestRunDuration': min(val, key=lambda val: val[1])[1].__str__() + "---" + max(val, key=lambda val: val[1])[
+            'TestRunDuration': str(min(val, key=lambda val: val[1])[1]) + "---" + max(val, key=lambda val: val[1])[
                 1].__str__(),
             'TotalNumberOfTests': len(val),
             'NumberOfFailures': len([item for item in val if item[3] == 'FAILURE']),
