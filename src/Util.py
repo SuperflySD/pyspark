@@ -14,13 +14,13 @@ sc = SparkContext("local", "first app")
 sqlContext = SQLContext(sc)
 sparkSession = SparkSession.builder.enableHiveSupport().getOrCreate()
 
-with open('../test_data/schemas/test_runs_schema.json') as data_file:
+with open('../test_data/schemes/test_runs_schema.json') as data_file:
     schema = StructType.fromJson(json.load(data_file))
 runsDF = sqlContext.read.format('csv') \
     .schema(schema).options(header='true') \
-    .load('/home/sergey/PycharmProjects/untitled/test_data/test_runs.csv').cache()
+    .load('../test_data/test_runs.csv').cache()
 
-with open('../test_data/schemas/test_description_schema.json') as data_file:
+with open('../test_data/schemes/test_description_schema.json') as data_file:
     new_schema = StructType.fromJson(json.load(data_file))
 descDF = sqlContext.read \
     .schema(new_schema) \
@@ -31,42 +31,25 @@ class TestSpark:
     # logFile = "hdfs:///user/input/test.txt"
 
     def last_test_Report(self):
-        runsDF.sort(runsDF.TestTimestamp.desc()).show(n=5)
+        # runsDF.sort(runsDF.TestTimestamp.desc()).show(n=5)
         maxTestTimestamp = runsDF.agg({"TestTimestamp": "max"}).collect()[0]["max(TestTimestamp)"]
         print("Last test report:")
         runsDF.filter(runsDF.TestTimestamp == maxTestTimestamp) \
             .join(descDF, descDF.TestId == runsDF.TestId, how='left') \
             .select("TestRunId", "TestTimestamp", "TestName", "TestResult").show()
 
-    def all_critical_tests(self):
-        def fails_in_the_row(tup: tuple):
-            count = 0
-            max = 0
-            i = 0
-            while i < len(tup):
-                if (tup[i + 1] == 'FAILURE'):
-                    count += 1
-                if (tup[i + 1] == 'SUCCESS'):
-                    if (count > max):
-                        max = count
-                    count = 0
-                i += 2
-            return max
+    def all_critical_tests_dataframe(self):
+        runsDF.createOrReplaceTempView("runsTable")
+        descDF.createOrReplaceTempView("descTable")
+        sqlContext.sql(
+            "select TestId, max(failures) maxFails from (select t.TestId, count(t.diff2) failures from "
+            "(select  TestRunId, TestId, TestResult, "
+            "row_number() over (partition by TestId, TestResult  order by TestResult)  - "
+            "row_number() over (partition by TestId order by TestId)  as diff2 from runsTable  order by TestId,TestRunId) t"
+            " where t.TestResult='FAILURE' group by t.diff2, t.TestId having count(t.diff2) >1 order by t.TestId) t1 group by TestId") \
+            .drop_duplicates().createOrReplaceTempView("failuresTable")
+        sqlContext.sql("Select * from failuresTable where maxFails>2").show()
 
-        numDF = runsDF.rdd \
-            .filter(lambda row: row['IsCritical'] is True) \
-            .map(lambda row: (row['TestId'], [row['TestRunId'], row['TestResult']])) \
-            .reduceByKey(lambda acc, val: acc + val) \
-            .map(lambda x: [x[0], fails_in_the_row(x[1])]) \
-            .filter(lambda x: x[1] > 2) \
-            .toDF().withColumnRenamed("_1", "TestId").withColumnRenamed("_2", "NumberOfConsequentFails")
-        print("All critical tests that fail more than 2 times in a row:")
-        numDF.join(runsDF, runsDF.TestId == numDF.TestId, how='left') \
-            .join(descDF, descDF.TestId == runsDF.TestId, how='left') \
-            .select(runsDF.TestId, "TestName", "NumberOfConsequentFails") \
-            .drop_duplicates() \
-            .sort(runsDF.TestId) \
-            .show(n=1000)
 
     def lastReportSummary(self):
         print("Last report summary:")
@@ -84,6 +67,7 @@ class TestSpark:
             'NumberOfCriticalFailures': len([item for item in val if (item[3] == 'FAILURE' and item[4] is True)])}) \
             .sortByKey().foreach(print)
 
+# just another way
         runsDF.rdd \
             .map(lambda row: (row['TestId'], {
             'TestId': row['TestId'],
