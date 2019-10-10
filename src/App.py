@@ -7,25 +7,27 @@ import json
 from pyspark.sql.context import HiveContext
 from pyspark.sql.functions import array, lit, when, col, count
 from pyspark.sql.types import StructType, StructField, StringType
+from pyspark.sql import Row, functions as F
+from pyspark.sql.window import Window
 
 sc = SparkContext()
 sqlContext = SQLContext(sc)
 sparkSession = SparkSession.builder.enableHiveSupport().getOrCreate()
 
-#workDir = "hdfs://172.29.0.2:9000/test/"
+# workDir = "hdfs://172.29.0.2:9000/test/"
 workDir = "/home/sergey/PycharmProjects/untitled/test_data/"
 
 schema = StructType.fromJson(json.loads(
     sqlContext.read.text(workDir + '/schemes/test_runs_schema.json', wholetext=True).first()[0]))
 runsDF = sqlContext.read.format('csv') \
     .schema(schema).options(header='true') \
-    .load(workDir+'test_runs.csv').cache()
+    .load(workDir + 'test_runs.csv').cache()
 
 new_schema = StructType.fromJson(json.loads(
     sqlContext.read.text(workDir + '/schemes/test_description_schema.json', wholetext=True).first()[0]))
 descDF = sqlContext.read \
     .schema(new_schema) \
-    .json(workDir+'test_description.json', multiLine=True).cache()
+    .json(workDir + 'test_description.json', multiLine=True).cache()
 
 
 def last_test_Report():
@@ -42,29 +44,48 @@ def all_critical_tests_dataframe():
     descDF.createOrReplaceTempView("descTable")
     sqlContext.sql(
         "select TestId, max(failures) maxFails from (select t.TestId, count(t.diff2) failures from "
-        "(select  TestRunId, TestId, TestResult, "
+        "(select TestRunId, TestId, TestResult, "
         "row_number() over (partition by TestId, TestResult  order by TestResult)  - "
-        "row_number() over (partition by TestId order by TestId)  as diff2 from runsTable  order by TestId,TestRunId) t"
+        "row_number() over (partition by TestId order by TestRunId)  as diff2 from runsTable  order by TestId,TestRunId) t"
         " where t.TestResult='FAILURE' group by t.diff2, t.TestId having count(t.diff2) >1 order by t.TestId) t1 group by TestId") \
         .drop_duplicates().createOrReplaceTempView("failuresTable")
-    sqlContext.sql("Select * from failuresTable where maxFails>2").show()
+    df1= sqlContext.sql("Select * from failuresTable where maxFails>2").cache()
+
+    df2= runsDF\
+        .filter(~((col('TestResult')=='FAILURE') & (col('IsCritical')=='false'))) \
+        .select('TestId', 'TestResult',
+                  (F.row_number().over(Window.partitionBy("TestId", "TestResult").orderBy("TestResult")) -
+                   F.row_number().over(Window.partitionBy("TestId").orderBy("TestRunId"))).alias("diff2"))\
+        .alias("t") \
+        .filter(col("t.TestResult") == 'FAILURE') \
+        .groupBy("t.diff2", "t.TestId").agg(count("t.diff2").alias('failures')) \
+        .alias("t1") \
+        .groupBy('t1.TestId').agg(F.max('t1.failures').alias("maxFailsInTheRow")).where(col('maxFailsInTheRow') > 2).orderBy('TestId')\
+        .cache()
+
+    #df1.show()
+    df2.show()
+    #df1.exceptAll(df2).show()
+    #df2.exceptAll(df1).show()
+
+
 
 
 def lastReportSummary():
     print("Last report summary:")
-    runsDF.rdd \
-        .map(lambda row: (row['TestId'], row)) \
-        .combineByKey(createCombiner=lambda val: [val],
-                      mergeValue=lambda c, val: c + [val],
-                      mergeCombiners=lambda u, u1: u + u1) \
-        .mapValues(lambda val: {
-        'TestRunDuration': min(val, key=lambda val: val[1])[1].__str__() + "---" + max(val, key=lambda val: val[1])[
-            1].__str__(),
-        'TotalNumberOfTests': len(val),
-        'NumberOfFailures': len([item for item in val if item[3] == 'FAILURE']),
-        'NumberOfCriticalTests': len([item for item in val if item[4] is True]),
-        'NumberOfCriticalFailures': len([item for item in val if (item[3] == 'FAILURE' and item[4] is True)])}) \
-        .sortByKey().foreach(print)
+    # runsDF.rdd \
+    #     .map(lambda row: (row['TestId'], row)) \
+    #     .combineByKey(createCombiner=lambda val: [val],
+    #                   mergeValue=lambda c, val: c + [val],
+    #                   mergeCombiners=lambda u, u1: u + u1) \
+    #     .mapValues(lambda val: {
+    #     'TestRunDuration': min(val, key=lambda val: val[1])[1].__str__() + "---" + max(val, key=lambda val: val[1])[
+    #         1].__str__(),
+    #     'TotalNumberOfTests': len(val),
+    #     'NumberOfFailures': len([item for item in val if item[3] == 'FAILURE']),
+    #     'NumberOfCriticalTests': len([item for item in val if item[4] is True]),
+    #     'NumberOfCriticalFailures': len([item for item in val if (item[3] == 'FAILURE' and item[4] is True)])}) \
+    #     .sortByKey().foreach(print)
 
     # just another way
     runsDF.rdd \

@@ -45,7 +45,7 @@ class TestSpark:
             "select TestId, max(failures) maxFails from (select t.TestId, count(t.diff2) failures from "
             "(select  TestRunId, TestId, TestResult, "
             "row_number() over (partition by TestId, TestResult  order by TestResult)  - "
-            "row_number() over (partition by TestId order by TestId)  as diff2 from runsTable  order by TestId,TestRunId) t"
+            "row_number() over (partition by TestId order by TestRunId)  as diff2 from runsTable  order by TestId,TestRunId) t"
             " where t.TestResult='FAILURE' group by t.diff2, t.TestId having count(t.diff2) >1 order by t.TestId) t1 group by TestId") \
             .drop_duplicates().createOrReplaceTempView("failuresTable")
         sqlContext.sql("Select * from failuresTable where maxFails>2").show()
